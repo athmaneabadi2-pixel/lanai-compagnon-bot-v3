@@ -79,33 +79,34 @@ HISTORY = prune_history(load_history())
 def generate_gpt_snippet():
     """
     2–3 phrases max, chaleureuses, personnalisées (Milouda, Lana, basket).
-    Fallback: renvoie None si pas de clé ou erreur.
+    Supporte openai v1 (OpenAI client) ET openai v0.28 (openai.ChatCompletion.create).
+    Retourne None si pas de clé ou en cas d'erreur.
     """
     if not OPENAI_API_KEY:
         return None
+
+    system = (
+        "Tu es Lanai, compagnon WhatsApp de Mohamed Djeziri. "
+        "Langage simple, phrases courtes, ton chaleureux. "
+        "Rappelle-toi: sa femme Milouda, leur chat Lana, il aime le basket. "
+        "Toujours bienveillant. 2 à 3 phrases max."
+    )
+    themes = [
+        "encouragement doux du jour + mini question",
+        "prise de nouvelles + clin d’œil à Lana le chat",
+        "mot positif + suggestion simple (respirer, marcher)",
+        "check-in basket (as-tu regardé les scores?) + phrase motivante",
+    ]
+    user_prompt = (
+        "Commence par « Salam aleykum Mohamed, » sur la première ligne. "
+        f"Thème: {random.choice(themes)}. "
+        "Évite le jargon. Pas d'emojis dans cette partie."
+    )
+
+    # 1) Tentative avec le SDK v1
     try:
-        # SDK OpenAI v1
-        from openai import OpenAI
+        from openai import OpenAI  # présent en v1+
         client = OpenAI(api_key=OPENAI_API_KEY)
-
-        system = (
-            "Tu es Lanai, compagnon WhatsApp de Mohamed Djeziri. "
-            "Langage simple, phrases courtes, ton chaleureux. "
-            "Rappelle-toi: sa femme Milouda, leur chat Lana, il aime le basket. "
-            "Toujours bienveillant. 2 à 3 phrases max."
-        )
-        themes = [
-            "encouragement doux du jour + mini question",
-            "prise de nouvelles + clin d’œil à Lana le chat",
-            "mot positif + suggestion simple (respirer, marcher)",
-            "check-in basket (as-tu regardé les scores?) + phrase motivante",
-        ]
-        user_prompt = (
-            "Commence par « Salam aleykum Mohamed, » sur la première ligne. "
-            f"Thème: {random.choice(themes)}. "
-            "Évite le jargon. Pas d'emojis dans cette partie."
-        )
-
         resp = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -113,13 +114,30 @@ def generate_gpt_snippet():
                 {"role": "user", "content": user_prompt},
             ],
             temperature=0.7,
-            max_tokens=150
+            max_tokens=150,
         )
-        text = resp.choices[0].message.content.strip()
-        return text
-    except Exception as e:
-        print(f"⚠️ GPT fallback (erreur): {e}")
+        return resp.choices[0].message.content.strip()
+    except Exception as e_v1:
+        print(f"⚠️ OpenAI v1 indisponible, on tente v0.28 : {e_v1}")
+
+    # 2) Fallback avec l’ancien SDK v0.28 (openai.ChatCompletion)
+    try:
+        import openai  # v0.28
+        openai.api_key = OPENAI_API_KEY
+        resp = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",  # modèle dispo en v0.28
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.7,
+            max_tokens=150,
+        )
+        return resp["choices"][0]["message"]["content"].strip()
+    except Exception as e_v028:
+        print(f"⚠️ GPT fallback (v0.28) échec : {e_v028}")
         return None
+
 # =========/ GPT =========
 
 # ========= Sélection banque JSON =========
