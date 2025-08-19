@@ -16,9 +16,18 @@ if not twilio_sid or not twilio_token:
     raise ValueError("❌ Identifiants Twilio manquants.")
 
 # ======== Dates ========
-today = datetime.now()
-yesterday = today - timedelta(days=1)
-date_str = yesterday.strftime("%Y-%m-%d")
+# Option de test : si DATE_OVERRIDE est défini (YYYY-MM-DD), on l'utilise.
+date_override = os.environ.get("DATE_OVERRIDE")
+
+if date_override:
+    date_str = date_override
+else:
+    today = datetime.utcnow()
+    yesterday = today - timedelta(days=1)
+    date_str = yesterday.strftime("%Y-%m-%d")
+
+print(f"ℹ️ Date interrogée: {date_str}")
+
 
 # ======== Préparation des URLs de requête pour les résultats ========
 # Note: 'league' et 'season' doivent correspondre à la NBA et aux ligues de football choisies.
