@@ -174,26 +174,24 @@ def build_message():
         gpt_text = generate_gpt_snippet()
 
     if effective_mode in ("json", "hybrid"):
-        # Dans hybrid: on ajoute une ligne banque JSON ~ 50% du temps
-        if effective_mode == "json" or random.random() < 0.5:
-            bank_line = pick_from_bank()
+        bank_line = pick_from_bank()  # toujours ajouter une ligne JSON
 
-    if effective_mode == "gpt" and not gpt_text:
-        # rien de GPT, tente banque
-        bank_line = pick_from_bank()
+    # Si GPT a échoué mais on a JSON
+    if effective_mode in ("gpt", "hybrid") and not gpt_text and bank_line:
+        gpt_text = "Salam aleykum Mohamed,"  # mini intro fallback
 
-    # Concaténation propre
+    # Composer le message
     if gpt_text and bank_line:
         msg = f"{gpt_text}\n\n{bank_line}"
     elif gpt_text:
         msg = gpt_text
     elif bank_line:
-        # petite intro si pas GPT
         msg = f"Salam aleykum Mohamed,\n\n{bank_line}"
     else:
         raise ValueError("❌ Aucun contenu disponible (ni GPT, ni JSON).")
 
     return msg.strip()
+
 # =========/ Composer =========
 
 # ========= Envoi WhatsApp via Twilio =========
