@@ -29,15 +29,22 @@ else:
 print(f"ℹ️ Date interrogée: {date_str}")
 
 
-# ======== Préparation des URLs de requête pour les résultats ========
-# Note: 'league' et 'season' doivent correspondre à la NBA et aux ligues de football choisies.
-# Par exemple, league=12, season=2024-2025 pour la NBA (à vérifier dans la documentation API-SPORTS).
-nba_url = f"https://v1.basketball.api-sports.io/games?date={date_str}&league=12&season=2024-2025"
-# Pour le football, on peut inclure plusieurs ligues européennes majeures (Ligue 1, Premier League, etc.).
+# === après avoir calculé date_str (existe déjà chez toi) ===
+from datetime import datetime
+
+def saison_football(date_iso: str) -> int:
+    # API-SPORTS: saison = année de début (ex: 2025 pour 2025/2026)
+    d = datetime.strptime(date_iso, "%Y-%m-%d")
+    # saison démarre mi-août environ ; on prend juillet comme seuil simple
+    return d.year if d.month >= 7 else d.year - 1
+
+season_auto = saison_football(date_str)
+
 football_leagues = [
-    {"id": 61, "season": 2023, "nom": "Ligue 1 (France)"},       # Ligue 1 française (saison 2023/24)
-    {"id": 39, "season": 2023, "nom": "Premier League (Angleterre)"}  # Premier League anglaise (saison 2023/24)
-    # On peut ajouter d'autres ligues ou coupes européennes ici si désiré.
+    {"id": 61, "season": season_auto, "nom": "Ligue 1 (France)"},
+    {"id": 39, "season": season_auto, "nom": "Premier League (Angleterre)"},
+]
+
 ]
 
 # ======== Requête API pour les résultats NBA ========
