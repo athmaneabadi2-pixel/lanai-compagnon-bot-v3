@@ -1,4 +1,4 @@
-# lanai_results.py
+# lanai_results.py (DEBUG)
 import os
 import requests
 from datetime import datetime, timedelta
@@ -11,6 +11,9 @@ TWILIO_TOKEN        = os.environ.get("TWILIO_AUTH_TOKEN")
 TWILIO_WHATSAPP     = os.environ.get("TWILIO_WHATSAPP_NUMBER")   # ex: whatsapp:+14155238886
 RECEIVER_WHATSAPP   = os.environ.get("MY_WHATSAPP_NUMBER")       # ex: whatsapp:+33XXXXXXXXX
 DATE_OVERRIDE       = os.environ.get("DATE_OVERRIDE")            # ex: 2025-08-17 (optionnel pour test)
+
+# === Affiche la clé (masquée) pour être sûr qu'on utilise la bonne ===
+print("🔐 API key (masquée) :", (API_SPORTS_KEY[:6] + "..." + API_SPORTS_KEY[-4:]) if API_SPORTS_KEY else "MISSING")
 
 if not API_SPORTS_KEY:
     raise ValueError("❌ API_SPORTS_KEY manquante.")
@@ -27,55 +30,39 @@ for vname, v in {
 if DATE_OVERRIDE:
     date_str = DATE_OVERRIDE
 else:
-    # "Hier" en UTC
     y = datetime.utcnow() - timedelta(days=1)
     date_str = y.strftime("%Y-%m-%d")
-print(f"ℹ️ Date interrogée: {date_str}")
+print("📅 Date interrogée :", date_str)
 
 # ========= SAISONS (AUTO) =========
 def saison_football(date_iso: str) -> int:
-    """
-    API-SPORTS: 'season' = année de DÉBUT de saison (ex: 2025 pour 2025/26).
-    Seuil simple: juillet = nouvelle saison.
-    """
     d = datetime.strptime(date_iso, "%Y-%m-%d")
     return d.year if d.month >= 7 else d.year - 1
 
 def saison_nba(date_iso: str) -> str:
-    """
-    Format API-SPORTS basket attendu: 'YYYY-YYYY+1' (ex: '2024-2025').
-    La saison NBA commence vers octobre; on prend oct (10) comme seuil.
-    """
     d = datetime.strptime(date_iso, "%Y-%m-%d")
     start_year = d.year if d.month >= 10 else d.year - 1
     return f"{start_year}-{start_year + 1}"
 
 SEASON_FOOT = saison_football(date_str)
 SEASON_NBA  = saison_nba(date_str)
-print(f"ℹ️ Saison foot utilisée: {SEASON_FOOT}")
-print(f"ℹ️ Saison NBA utilisée:  {SEASON_NBA}")
+print("🏟️ Saison foot :", SEASON_FOOT, "| 🏀 Saison NBA :", SEASON_NBA)
 
 # ========= LIGUES =========
-# NBA (basket)
 NBA_LEAGUE_ID = 12  # NBA
-
-# Football européen (ajoute d'autres ligues si besoin)
 FOOTBALL_LEAGUES = [
     {"id": 61, "nom": "Ligue 1 (France)"},
     {"id": 39, "nom": "Premier League (Angleterre)"},
-    # {"id": 140, "nom": "LaLiga (Espagne)"},
-    # {"id": 135, "nom": "Serie A (Italie)"},
-    # {"id": 78,  "nom": "Bundesliga (Allemagne)"},
 ]
 
-# ========= REQUÊTES =========
-headers_basket = {"x-apisports-key": API_SPORTS_KEY}
-headers_foot   = {"x-apisports-key": API_SPORTS_KEY}
+# ========= HEADERS & DOMAINES =========
+headers = {"x-apisports-key": API_SPORTS_KEY}
+print("🌐 Domains:", "v1.basketball.api-sports.io", "&&", "v3.football.api-sports.io")
 
-# NBA
+# ========= NBA =========
 nba_url = f"https://v1.basketball.api-sports.io/games?date={date_str}&league={NBA_LEAGUE_ID}&season={SEASON_NBA}"
-r_nba = requests.get(nba_url, headers=headers_basket, timeout=20)
-print("🔎 NBA URL:", nba_url, "| status:", r_nba.status_code)
+r_nba = requests.get(nba_url, headers=headers, timeout=20)
+print("🔎 NBA URL:", nba_url, "| status:", r_nba.status_code, "| sample:", (r_nba.text or "")[:180])
 
 nba_lines = []
 if r_nba.status_code == 200:
@@ -89,12 +76,12 @@ if r_nba.status_code == 200:
 else:
     nba_lines.append("(erreur API NBA)")
 
-# Football
+# ========= FOOT =========
 football_lines = []
 for lg in FOOTBALL_LEAGUES:
     foot_url = f"https://v3.football.api-sports.io/fixtures?date={date_str}&league={lg['id']}&season={SEASON_FOOT}"
-    r_foot = requests.get(foot_url, headers=headers_foot, timeout=20)
-    print(f"🔎 FOOT {lg['nom']} URL:", foot_url, "| status:", r_foot.status_code)
+    r_foot = requests.get(foot_url, headers=headers, timeout=20)
+    print(f"🔎 FOOT {lg['nom']} URL:", foot_url, "| status:", r_foot.status_code, "| sample:", (r_foot.text or "")[:180])
     if r_foot.status_code == 200:
         for f in r_foot.json().get("response", []):
             home = f.get("teams", {}).get("home", {}).get("name")
@@ -108,13 +95,9 @@ for lg in FOOTBALL_LEAGUES:
 
 # ========= MESSAGE =========
 msg = f"🤾 Salam aleykum Mohamed,\nVoici les résultats du {date_str} :\n\n"
-
-msg += "🏀 NBA :\n"
-msg += ("\n".join(f" - {l}" for l in nba_lines) if nba_lines else " - Aucun match.\n")
+msg += "🏀 NBA :\n" + ("\n".join(f" - {l}" for l in nba_lines) if nba_lines else " - Aucun match.\n")
 msg += "\n"
-
-msg += "⚽ Football européen :\n"
-msg += ("\n".join(f" - {l}" for l in football_lines) if football_lines else " - Aucun match important.\n")
+msg += "⚽ Football européen :\n" + ("\n".join(f" - {l}" for l in football_lines) if football_lines else " - Aucun match important.\n")
 
 # ========= ENVOI WHATSAPP =========
 client = Client(TWILIO_SID, TWILIO_TOKEN)
