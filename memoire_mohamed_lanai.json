@@ -1,0 +1,69 @@
+{
+  "Identité": {
+    "Nom": "Djeziri",
+    "Prénom": "Mohamed",
+    "Date de naissance": "26/11/1963",
+    "Âge": "61 ans",
+    "Lieu de naissance": "hopital de Carvin 62220",
+    "Nationalité": "Française, mais il a aussi un passeport algérien depuis 2 ans",
+    "Langue(s) maternelle(s)": "Français",
+    "Langue(s) parlée(s)": "Français",
+    "Niveau d'études": "CAP soudeur",
+    "Métier exercé": "Soudeur",
+    "Métier préféré (rêvé)": "Il aime beaucoup les voitures, notamment les Ford (il a eu une Ford Escort rouge et une Ford Cliper)",
+    "Religion": "Musulman",
+    "Pratique religieuse ? (oui/non + précisions)": "Pratiquant",
+    "Particularités de santé (Parkinson, etc.)": "Parkinson, tension, il est méticuleux sur son traitement et la prise de tension"
+  },
+  "Famille": {
+    "Nom de son épouse": "Milouda",
+    "Depuis combien de temps ensemble ?": "Mariés depuis le 25 mai 1991",
+    "Nom(s) et âge(s) des enfants": "Faïza (12/11/1990), Yacine (06/06/1992), Dounia (15/01/1997)",
+    "Petits-enfants (noms, âges, relation)": "Sulayman (30/06/2017), Ibrahim (17/03/2019), Issa (01/12/2020) – enfants de Faïza. Elle est actuellement enceinte d'une fille.",
+    "Personnes souvent mentionnées": "Jean Schultz, ami rencontré au basket, tous deux arbitres, vont voir des matchs ensemble à Denain"
+  },
+  "Souvenirs": {
+    "Fierté ou accomplissement": "Médaille d’arbitrage exposée sous la télé",
+    "Personnalités admirées": "Bourvil, Louis de Funès, Bruce Lee, Dalida, Boney M",
+    "Relation avec l’Algérie": "Il adore l’Algérie pour la famille, la nourriture, les paysages",
+    "Particularité de Lana": "Elle ne rentre pas dans la maison car Milouda ne veut pas, mais quand Milouda est absente, Mohamed la fait entrer."
+  },
+  "Goûts": {
+    "Sport préféré": "Basket (toutes les ligues, NBA et amateur), aussi un peu de foot",
+    "Plat préféré": "Pâtes sauce tomate avec 2 œufs durs à côté",
+    "Boisson favorite": "Eau, jus de grenade, Perrier",
+    "Musique/chanteur préféré": "Boney M – Daddy Cool",
+    "Film ou série préférée": "La Grande Vadrouille, La 7ème Compagnie",
+    "Lectures": "Magazines auto et santé",
+    "Activités": "Marche, arbitrage basket, voudrait aller à la piscine si docteur OK, aime le vélo",
+    "Plaisirs simples": "Regarder les matchs à la télé (basket, foot, auto, moto)",
+    "Voyage rêvé": "Un moment il rêvait de l’Italie et de la Grèce"
+  },
+  "Habitudes": {
+    "Heure de lever/coucher": "Se couche vers 23h, se lève vers 10h",
+    "Moment préféré": "Le soir, le repos",
+    "Activités quotidiennes": "Aide sa femme dans les tâches ménagères",
+    "Aime les surprises": "Oui",
+    "Aide souhaitée": "Aimerait de l’aide pour son jardin",
+    "Habitudes avec sa femme": "Regardent la télé ensemble, partagent des moments complices",
+    "Rituels religieux": "Fait ses prières"
+  },
+  "Communication": {
+    "Préférence de message": "Messages simples, apaisés, calmes",
+    "Aime les citations": "Oui, lit une citation chaque jour avec sa femme",
+    "Aime les blagues": "Oui",
+    "Ton préféré": "Calme et souriant",
+    "Utilisation de WhatsApp": "Oui, appris récemment grâce à Dounia",
+    "Expressions fréquentes": "« Je touche du bois », « mange avant qu’on te mange », invocation du départ en voiture : « Bismillahi tawakkaltu ‘ala Allah… »",
+    "Langage affectueux": "Embrasse sa femme sur le front et chante le matin"
+  },
+  "Bien-être": {
+    "Ce qui lui donne le sourire": "Les chats, sa femme, ses enfants et petits-enfants, les films comiques",
+    "Ce qui l’apaise": "L’écoute du Coran quand Milouda le met",
+    "Ce qui l’encourage à parler": "Le sport, le basket, les voitures",
+    "Ce qui le motive à se lever": "Les rendez-vous ou arbitrages",
+    "Sensibilités": "Les injustices, la souffrance animale",
+    "Souvenirs heureux liés à la musique": "Les tubes des années 80 le rendent joyeux",
+    "Souhaite des rappels médicaux/religieux ?": "Oui, s’ils sont simples et positifs"
+  }
+}
