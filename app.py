@@ -98,7 +98,7 @@ if not twilio_sid or not twilio_token or not twilio_whatsapp:
 twilio_client = Client(twilio_sid, twilio_token)
 
 # ==== Webhook WhatsApp entrant ====
-@app.route("/message", methods=["POST"])
+@app.route("/webhook", methods=["POST"])
 def receive_message():
     sender = request.form.get("From")  # ex 'whatsapp:+33...'
     incoming_msg = (request.form.get("Body") or "").strip()
