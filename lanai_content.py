@@ -1,47 +1,38 @@
+# lanai_content.py
 import os
 import json
 import random
 import hashlib
 from datetime import datetime, timedelta
 from twilio.rest import Client
+from memory_store import init_schema, add_message  # mémoire partagée DB
 
-# ========== Config via ENV ==========
+# ======== Config via ENV ========
 MODE = os.environ.get("LANAI_MODE", "hybrid").lower()  # hybrid | json | gpt
 HISTORY_DAYS = int(os.environ.get("LANAI_HISTORY_DAYS", "60"))
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")  # optionnel
-# ==========/ Config via ENV ==========
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")  # optionnel ici
+# ================================
 
-# ========= Chemins robustes =========
+# ======== Init DB (table si besoin) ========
+init_schema()
+
+# ======== Chemins robustes (banque JSON facultative) ========
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CANDIDATE_JSON = [
     os.path.join(BASE_DIR, "contenu_messages.json"),
     os.path.join(BASE_DIR, "data", "contenu_messages.json"),
 ]
-HISTORY_CANDIDATE = [
-    os.path.join(BASE_DIR, "history.json"),
-    os.path.join(BASE_DIR, "data", "history.json"),
-]
-
 CONTENT_FILE = next((p for p in CANDIDATE_JSON if os.path.exists(p)), None)
-HISTORY_FILE = HISTORY_CANDIDATE[0]  # par défaut à côté
-if not CONTENT_FILE:
-    # si pas de JSON et pas d'OpenAI => on ne peut rien faire
-    if not OPENAI_API_KEY and MODE in ("json", "hybrid"):
-        raise FileNotFoundError("❌ contenu_messages.json introuvable et pas d'OPENAI_API_KEY. "
-                                "Ajoute le JSON ou définis OPENAI_API_KEY.")
-# =========/ Chemins robustes =========
 
-# ========= Banque JSON (optionnelle) =========
 def load_bank():
     if not CONTENT_FILE:
         return {}
     with open(CONTENT_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
-
 BANK = load_bank()
-# =========/ Banque JSON ==========
 
-# ========= Historique anti-répétition =========
+# ======== Anti-répétition (locale) via hash ========
+HISTORY_FILE = os.path.join(BASE_DIR, "history.json")
 def load_history():
     try:
         with open(HISTORY_FILE, "r", encoding="utf-8") as f:
@@ -50,10 +41,6 @@ def load_history():
         return {"messages": []}
 
 def save_history(hist):
-    # crée le dossier si besoin
-    hist_dir = os.path.dirname(HISTORY_FILE)
-    if hist_dir and not os.path.exists(hist_dir):
-        os.makedirs(hist_dir, exist_ok=True)
     with open(HISTORY_FILE, "w", encoding="utf-8") as f:
         json.dump(hist, f, ensure_ascii=False, indent=2)
 
@@ -73,28 +60,22 @@ def remember(text, hist):
     save_history(hist)
 
 HISTORY = prune_history(load_history())
-# =========/ Historique =========
 
-# ========= GPT (optionnel) =========
+# ======== GPT helper (v1 + fallback v0.28) ========
 def generate_gpt_snippet():
-    """
-    2–3 phrases max, chaleureuses, personnalisées (Milouda, Lana, basket).
-    Supporte openai v1 (OpenAI client) ET openai v0.28 (openai.ChatCompletion.create).
-    Retourne None si pas de clé ou en cas d'erreur.
-    """
     if not OPENAI_API_KEY:
         return None
 
     system = (
         "Tu es Lanai, compagnon WhatsApp de Mohamed Djeziri. "
-        "Langage simple, phrases courtes, ton chaleureux. "
-        "Rappelle-toi: sa femme Milouda, leur chat Lana, il aime le basket. "
-        "Toujours bienveillant. 2 à 3 phrases max."
+        "Langage simple, phrases courtes, ton chaleureux, bienveillant. "
+        "Fais parfois un clin d'œil à sa femme Milouda et à leur chat Lana. "
+        "2 à 3 phrases max."
     )
     themes = [
-        "encouragement doux du jour + mini question",
+        "encouragement doux + mini question",
         "prise de nouvelles + clin d’œil à Lana le chat",
-        "mot positif + suggestion simple (respirer, marcher)",
+        "mot positif + petite suggestion (respiration, marche)",
         "check-in basket (as-tu regardé les scores?) + phrase motivante",
     ]
     user_prompt = (
@@ -103,9 +84,9 @@ def generate_gpt_snippet():
         "Évite le jargon. Pas d'emojis dans cette partie."
     )
 
-    # 1) Tentative avec le SDK v1
+    # v1
     try:
-        from openai import OpenAI  # présent en v1+
+        from openai import OpenAI
         client = OpenAI(api_key=OPENAI_API_KEY)
         resp = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -114,37 +95,34 @@ def generate_gpt_snippet():
                 {"role": "user", "content": user_prompt},
             ],
             temperature=0.7,
-            max_tokens=150,
+            max_tokens=150
         )
         return resp.choices[0].message.content.strip()
-    except Exception as e_v1:
-        print(f"⚠️ OpenAI v1 indisponible, on tente v0.28 : {e_v1}")
+    except Exception as e1:
+        print(f"⚠️ OpenAI v1 indisponible, essai v0.28: {e1}")
 
-    # 2) Fallback avec l’ancien SDK v0.28 (openai.ChatCompletion)
+    # v0.28
     try:
-        import openai  # v0.28
+        import openai
         openai.api_key = OPENAI_API_KEY
         resp = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",  # modèle dispo en v0.28
+            model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": user_prompt},
             ],
             temperature=0.7,
-            max_tokens=150,
+            max_tokens=150
         )
         return resp["choices"][0]["message"]["content"].strip()
-    except Exception as e_v028:
-        print(f"⚠️ GPT fallback (v0.28) échec : {e_v028}")
+    except Exception as e2:
+        print(f"⚠️ GPT fallback (v0.28) échec : {e2}")
         return None
 
-# =========/ GPT =========
-
-# ========= Sélection banque JSON =========
+# ======== Sélection banque JSON (toujours incluse en mode hybrid/json) ========
 def pick_from_bank():
-    # on privilégie hadith/coran/citations_fiables
     categories = []
-    for key in ("hadith", "coran", "citations_fiables"):
+    for key in ("hadith", "coran", "citations", "sante", "citations_fiables"):
         if key in BANK and isinstance(BANK[key], list) and BANK[key]:
             categories.append(key)
     if not categories:
@@ -154,15 +132,14 @@ def pick_from_bank():
     prefix_map = {
         "hadith": "🤲 Hadith : ",
         "coran": "📖 Coran : ",
-        "citations_fiables": "✨ Citation : "
+        "citations": "✨ Citation : ",
+        "citations_fiables": "✨ Citation : ",
+        "sante": "💊 Santé : ",
     }
     return f"{prefix_map.get(cat, '')}{txt}"
-# =========/ Sélection banque JSON =========
 
-# ========= Composer le message final =========
+# ======== Composer message final ========
 def build_message():
-    global MODE
-    # auto fallback si pas de clé
     effective_mode = MODE
     if not OPENAI_API_KEY and MODE in ("gpt", "hybrid"):
         effective_mode = "json"
@@ -174,27 +151,21 @@ def build_message():
         gpt_text = generate_gpt_snippet()
 
     if effective_mode in ("json", "hybrid"):
-        bank_line = pick_from_bank()  # toujours ajouter une ligne JSON
+        bank_line = pick_from_bank()  # toujours inclure une ligne JSON
 
-    # Si GPT a échoué mais on a JSON
     if effective_mode in ("gpt", "hybrid") and not gpt_text and bank_line:
-        gpt_text = "Salam aleykum Mohamed,"  # mini intro fallback
+        gpt_text = "Salam aleykum Mohamed,"  # mini intro si GPT HS
 
-    # Composer le message
     if gpt_text and bank_line:
-        msg = f"{gpt_text}\n\n{bank_line}"
-    elif gpt_text:
-        msg = gpt_text
-    elif bank_line:
-        msg = f"Salam aleykum Mohamed,\n\n{bank_line}"
-    else:
-        raise ValueError("❌ Aucun contenu disponible (ni GPT, ni JSON).")
+        return f"{gpt_text}\n\n{bank_line}".strip()
+    if gpt_text:
+        return gpt_text.strip()
+    if bank_line:
+        return f"Salam aleykum Mohamed,\n\n{bank_line}".strip()
 
-    return msg.strip()
+    raise ValueError("❌ Aucun contenu disponible (ni GPT, ni JSON).")
 
-# =========/ Composer =========
-
-# ========= Envoi WhatsApp via Twilio =========
+# ======== Envoi WhatsApp via Twilio ========
 def send_whatsapp(text):
     twilio_sid = os.environ.get("TWILIO_ACCOUNT_SID")
     twilio_token = os.environ.get("TWILIO_AUTH_TOKEN")
@@ -212,21 +183,26 @@ def send_whatsapp(text):
         body=text,
         to=receiver_whatsapp
     )
-    return message.sid
-# =========/ Envoi =========
+    return message.sid, receiver_whatsapp
 
+# ======== Main (cron) ========
 if __name__ == "__main__":
     final = build_message()
 
-    # anti-répétition : si déjà envoyé, on tente une deuxième fois (petite variation), sinon on passe
+    # Anti-répétition locale
     if already_sent(final, HISTORY):
         alt = build_message()
         if not already_sent(alt, HISTORY):
             final = alt
 
-    sid = send_whatsapp(final)
+    sid, user_phone = send_whatsapp(final)
     remember(final, HISTORY)
 
-    print(f"ℹ️ Mode effectif: {MODE} (clé GPT={'oui' if OPENAI_API_KEY else 'non'})")
-    print(f"ℹ️ JSON: {CONTENT_FILE if CONTENT_FILE else 'non utilisé'} | History: {HISTORY_FILE}")
-    print(f"✅ Message WhatsApp envoyé: {sid}")
+    # ÉCRITURE EN DB PARTAGÉE : consigner le message du cron comme 'assistant'
+    try:
+        add_message(user_phone, "assistant", final)
+    except Exception as e:
+        print(f"⚠️ Erreur DB (save cron): {e}")
+
+    print(f"ℹ️ Mode: {MODE} | JSON: {CONTENT_FILE if CONTENT_FILE else 'non'}")
+    print(f"✅ WhatsApp envoyé. SID: {sid}")
