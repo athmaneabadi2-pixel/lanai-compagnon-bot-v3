@@ -3,6 +3,10 @@ import os
 from datetime import datetime, timedelta, timezone
 import requests
 from twilio.rest import Client
+from memory_store import init_schema, add_message  # NEW
+
+# === Init DB (crée la table si besoin) ===
+init_schema()  # NEW
 
 # ========== ENV ==========
 RAPIDAPI_KEY_FOOT   = os.environ.get("RAPIDAPI_KEY_FOOT")
@@ -186,3 +190,10 @@ msg += format_section("⚽", "Football européen", foot_by_league)
 client = Client(TWILIO_SID, TWILIO_TOKEN)
 message = client.messages.create(from_=TWILIO_WHATSAPP, body=msg.strip(), to=RECEIVER_WHATSAPP)
 print(f"✅ WhatsApp envoyé (SID={message.sid})")
+
+# ========== LOG EN DB (nouveau) ==========
+try:
+    add_message(RECEIVER_WHATSAPP, "assistant", msg.strip())  # NEW
+    print("[DB][RESULTS] Insert OK")  # NEW
+except Exception as e:
+    print(f"[ERR][DB][RESULTS] {e}")  # NEW
