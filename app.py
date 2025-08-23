@@ -5,8 +5,12 @@ import json
 import openai
 from twilio.rest import Client
 from memory_store import init_schema, add_message, get_history
+from concurrent.futures import ThreadPoolExecutor
 
 app = Flask(__name__)
+
+executor = ThreadPoolExecutor(max_workers=int(os.environ.get("WEBHOOK_WORKERS", "4")))
+
 
 # ==== Initialisation DB (création table si besoin) ====
 init_schema()
@@ -98,45 +102,69 @@ if not twilio_sid or not twilio_token or not twilio_whatsapp:
 twilio_client = Client(twilio_sid, twilio_token)
 
 # ==== Webhook WhatsApp entrant ====
+# ====== Worker async (traitement en arrière-plan) ======
+def _process_incoming(sender: str, incoming_msg: str, msg_sid: str | None):
+    try:
+        print(f"[IN] sid={msg_sid} from={sender} body={incoming_msg[:140]}", flush=True)
+
+        # 1) Historique (20 derniers)
+        try:
+            hist = get_history(sender, limit=20)
+        except Exception as e_hist:
+            print(f"[ERR][DB-HIST] {e_hist}", flush=True)
+            hist = []
+
+        # 2) Prompt → system + hist + user
+        messages = [{"role": "system", "content": system_message_content}]
+        messages.extend(hist)
+        messages.append({"role": "user", "content": incoming_msg})
+
+        # 3) GPT
+        try:
+            assistant_reply = chat_gpt(messages)
+        except Exception as e_gpt:
+            print(f"[ERR][GPT] {e_gpt}", flush=True)
+            assistant_reply = "Désolé, j’ai eu un petit souci. Tu peux reformuler ?"
+
+        # 4) Sauvegarde DB (IN/OUT)
+        try:
+            add_message(sender, "user", incoming_msg)
+            add_message(sender, "assistant", assistant_reply)
+        except Exception as e_db:
+            print(f"[ERR][DB-SAVE] {e_db}", flush=True)
+
+        # 5) Envoi WhatsApp
+        try:
+            msg = twilio_client.messages.create(
+                from_=twilio_whatsapp,
+                body=assistant_reply,
+                to=sender
+            )
+            print(f"[OUT] sid={msg.sid} to={sender}", flush=True)
+        except Exception as e_tw:
+            print(f"[ERR][TWILIO] {e_tw}", flush=True)
+
+    except Exception as e:
+        print(f"[ERR][WORKER] {e}", flush=True)
+
 @app.route("/webhook", methods=["POST"])
 def receive_message():
     sender = request.form.get("From")  # ex 'whatsapp:+33...'
     incoming_msg = (request.form.get("Body") or "").strip()
-    if not sender:
-        return ("", 204)
-    if not incoming_msg:
-        # Rien à dire mais on loggue côté DB pour la forme si besoin
-        return ("", 204)
+    msg_sid = request.form.get("MessageSid")
+    if not sender or not incoming_msg:
+        return ("", 200)
 
-    # 1) Charger historique partagé (20 derniers messages)
-    hist = get_history(sender, limit=20)
+    # Réponse immédiate → traitement en arrière-plan (évite les timeouts)
+    executor.submit(_process_incoming, sender, incoming_msg, msg_sid)
+    return ("", 200)
 
-    # 2) Construire prompt => system + hist + nouveau user
-    messages = [{"role": "system", "content": system_message_content}]
-    messages.extend(hist)
-    messages.append({"role": "user", "content": incoming_msg})
 
-    # 3) GPT
-    assistant_reply = chat_gpt(messages)
+  
+@app.route("/health", methods=["GET"])
+def health():
+    return "ok", 200
 
-    # 4) Persister user + assistant en DB
-    try:
-        add_message(sender, "user", incoming_msg)
-        add_message(sender, "assistant", assistant_reply)
-    except Exception as e:
-        print(f"⚠️ Erreur DB (save): {e}")
-
-    # 5) Répondre via WhatsApp
-    try:
-        twilio_client.messages.create(
-            from_=twilio_whatsapp,
-            body=assistant_reply,
-            to=sender
-        )
-    except Exception as e:
-        print(f"⚠️ Erreur Twilio: {e}")
-
-    return ("", 204)
 
 if __name__ == "__main__":
     # Render bind
