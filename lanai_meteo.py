@@ -1,7 +1,11 @@
-import requests
 import os
+import requests
 from datetime import datetime, timedelta
 from twilio.rest import Client
+from memory_store import init_schema, add_message
+
+# ======== Init DB ========
+init_schema()  # crée la table si besoin
 
 # ======== Clés API et config depuis .env ========
 api_key = os.environ.get("OPENWEATHER_API_KEY")
@@ -14,31 +18,36 @@ if not api_key:
     raise ValueError("❌ Clé API météo manquante.")
 if not twilio_sid or not twilio_token:
     raise ValueError("❌ Identifiants Twilio manquants.")
+if not twilio_whatsapp or not receiver_whatsapp:
+    raise ValueError("❌ Numéros WhatsApp manquants (TWILIO_WHATSAPP_NUMBER / MY_WHATSAPP_NUMBER).")
 
 # ======== Coordonnées GPS ========
 villes = {
     "Loffre": {"lat": 50.3844, "lon": 3.1069},
-    "Le Cannet (où Yacine vit)": {"lat": 43.5769, "lon": 7.0191}
+    "Le Cannet (où Yacine vit)": {"lat": 43.5769, "lon": 7.0191},
 }
 
 # ======== Fonction météo ========
 def get_weather_tomorrow(lat, lon):
-    url = f"https://api.openweathermap.org/data/3.0/onecall?lat={lat}&lon={lon}&appid={api_key}&units=metric&lang=fr"
-    response = requests.get(url)
+    url = (
+        f"https://api.openweathermap.org/data/3.0/onecall"
+        f"?lat={lat}&lon={lon}&appid={api_key}&units=metric&lang=fr"
+    )
+    try:
+        resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as e:
+        return f"Impossible de récupérer la météo ({type(e).__name__})"
 
-    if response.status_code != 200:
-        return f"Impossible de récupérer la météo (code {response.status_code})"
+    daily = data.get("daily", [])
+    if len(daily) < 2:
+        return "Prévision de demain indisponible"
 
-    data = response.json()
-
-    if "daily" not in data:
-        return "Impossible de trouver la météo de demain"
-
-    tomorrow_data = data["daily"][1]
-    temp = round(tomorrow_data["temp"]["day"])
-    description = tomorrow_data["weather"][0]["description"].capitalize()
-    humidity = tomorrow_data["humidity"]
-
+    tomorrow = daily[1]
+    temp = round(tomorrow["temp"]["day"])
+    description = tomorrow["weather"][0]["description"].capitalize()
+    humidity = tomorrow["humidity"]
     return f"{temp}°C, {description}, humidité {humidity}%"
 
 # ======== Création du message ========
@@ -49,12 +58,21 @@ for nom, coords in villes.items():
     meteo = get_weather_tomorrow(coords["lat"], coords["lon"])
     message_text += f"🌤 {nom} : {meteo}\n"
 
-# ======== Envoi via Twilio WhatsApp ========
+# ======== Envoi via Twilio WhatsApp (une seule fois) ========
 client = Client(twilio_sid, twilio_token)
-message = client.messages.create(
-    from_=twilio_whatsapp,
-    body=message_text,
-    to=receiver_whatsapp
-)
+try:
+    message = client.messages.create(
+        from_=twilio_whatsapp,
+        body=message_text,
+        to=receiver_whatsapp,
+    )
+    print(f"✅ Message WhatsApp envoyé : {message.sid}")
+except Exception as e:
+    print(f"[ERR][TWILIO] {e}")
 
-print(f"✅ Message envoyé sur WhatsApp : {message.sid}")
+# ======== Log en DB ========
+try:
+    add_message(receiver_whatsapp, "assistant", message_text)
+    print("[DB][METEO] Insert OK")
+except Exception as e:
+    print(f"[ERR][DB][METEO] {e}")
