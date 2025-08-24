@@ -107,14 +107,26 @@ def _process_incoming(sender: str, incoming_msg: str, msg_sid: str | None):
     try:
         print(f"[IN] sid={msg_sid} from={sender} body={incoming_msg[:140]}", flush=True)
 
-        # 1) Historique (20 derniers)
+        # 1) Log IN (dédup via msg_sid+direction)
+        try:
+            add_message(
+                user_phone=sender,
+                role="user",
+                content=incoming_msg,
+                msg_sid=msg_sid,
+                direction="in",
+                source="webhook",
+            )
+        except Exception as e_db_in:
+            print(f"[ERR][DB-SAVE-IN] {e_db_in}", flush=True)
+
+        # 2) Historique + prompt
         try:
             hist = get_history(sender, limit=20)
         except Exception as e_hist:
             print(f"[ERR][DB-HIST] {e_hist}", flush=True)
             hist = []
 
-        # 2) Prompt → system + hist + user
         messages = [{"role": "system", "content": system_message_content}]
         messages.extend(hist)
         messages.append({"role": "user", "content": incoming_msg})
@@ -126,26 +138,35 @@ def _process_incoming(sender: str, incoming_msg: str, msg_sid: str | None):
             print(f"[ERR][GPT] {e_gpt}", flush=True)
             assistant_reply = "Désolé, j’ai eu un petit souci. Tu peux reformuler ?"
 
-        # 4) Sauvegarde DB (IN/OUT)
-        try:
-            add_message(sender, "user", incoming_msg)
-            add_message(sender, "assistant", assistant_reply)
-        except Exception as e_db:
-            print(f"[ERR][DB-SAVE] {e_db}", flush=True)
-
-        # 5) Envoi WhatsApp
+        # 4) Envoi WhatsApp (OUT)
+        tw_sid = None
         try:
             msg = twilio_client.messages.create(
                 from_=twilio_whatsapp,
                 body=assistant_reply,
                 to=sender
             )
-            print(f"[OUT] sid={msg.sid} to={sender}", flush=True)
+            tw_sid = msg.sid
+            print(f"[OUT] sid={tw_sid} to={sender}", flush=True)
         except Exception as e_tw:
             print(f"[ERR][TWILIO] {e_tw}", flush=True)
 
+        # 5) Log OUT (dédup jour+source+hash ; msg_sid utile pour traçabilité)
+        try:
+            add_message(
+                user_phone=sender,
+                role="assistant",
+                content=assistant_reply,
+                msg_sid=tw_sid,
+                direction="out",
+                source="webhook",
+            )
+        except Exception as e_db_out:
+            print(f"[ERR][DB-SAVE-OUT] {e_db_out}", flush=True)
+
     except Exception as e:
         print(f"[ERR][WORKER] {e}", flush=True)
+
 
 @app.route("/webhook", methods=["POST"])
 def receive_message():
