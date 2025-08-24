@@ -70,9 +70,16 @@ try:
 except Exception as e:
     print(f"[ERR][TWILIO] {e}")
 
-# ======== Log en DB ========
+# ======== Log en DB (dédup jour+source+hash) ========
 try:
-    add_message(receiver_whatsapp, "assistant", message_text)
+    add_message(
+        user_phone=receiver_whatsapp,
+        role="assistant",
+        content=message_text,
+        msg_sid=(message.sid if 'message' in locals() and message else None),
+        direction="out",
+        source="cron_weather",
+    )
     print("[DB][METEO] Insert OK")
 except Exception as e:
     print(f"[ERR][DB][METEO] {e}")
