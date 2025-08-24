@@ -191,9 +191,17 @@ client = Client(TWILIO_SID, TWILIO_TOKEN)
 message = client.messages.create(from_=TWILIO_WHATSAPP, body=msg.strip(), to=RECEIVER_WHATSAPP)
 print(f"✅ WhatsApp envoyé (SID={message.sid})")
 
-# ========== LOG EN DB (nouveau) ==========
+# ========== LOG EN DB (dédup jour+source+hash) ==========
 try:
-    add_message(RECEIVER_WHATSAPP, "assistant", msg.strip())  # NEW
-    print("[DB][RESULTS] Insert OK")  # NEW
+    add_message(
+        user_phone=RECEIVER_WHATSAPP,
+        role="assistant",
+        content=msg.strip(),
+        msg_sid=(message.sid if 'message' in locals() and message else None),
+        direction="out",
+        source="cron_results",
+    )
+    print("[DB][RESULTS] Insert OK")
 except Exception as e:
-    print(f"[ERR][DB][RESULTS] {e}")  # NEW
+    print(f"[ERR][DB][RESULTS] {e}")
+
