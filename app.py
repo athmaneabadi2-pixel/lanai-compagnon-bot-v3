@@ -6,6 +6,7 @@ import openai
 from twilio.rest import Client
 from memory_store import init_schema, add_message, get_history
 from concurrent.futures import ThreadPoolExecutor
+from sports_query import is_sports_question, handle_sports_question
 
 app = Flask(__name__)
 
@@ -131,14 +132,28 @@ def _process_incoming(sender: str, incoming_msg: str, msg_sid: str | None):
         messages.extend(hist)
         messages.append({"role": "user", "content": incoming_msg})
 
-        # 3) GPT
+        # 3) Tentative de réponse via pipeline SPORT (API foot/basket)
+        sports_answer = None
         try:
-            assistant_reply = chat_gpt(messages)
-        except Exception as e_gpt:
-            print(f"[ERR][GPT] {e_gpt}", flush=True)
-            assistant_reply = "Désolé, j’ai eu un petit souci. Tu peux reformuler ?"
+            if is_sports_question(incoming_msg):
+                sports_answer = handle_sports_question(incoming_msg)
+        except Exception as e_sport:
+            print(f"[SPORTS] Erreur lors du traitement de la question sport : {e_sport}", flush=True)
+            sports_answer = None
 
-        # 4) Envoi WhatsApp (OUT)
+        # 4) Choix de la réponse : sport ou GPT
+        if sports_answer:
+            # Réponse fiable issue de l'API sport → on n'appelle pas GPT
+            assistant_reply = sports_answer
+        else:
+            # Comportement normal : on laisse GPT gérer
+            try:
+                assistant_reply = chat_gpt(messages)
+            except Exception as e_gpt:
+                print(f"[ERR][GPT] {e_gpt}", flush=True)
+                assistant_reply = "Désolé, j’ai eu un petit souci. Tu peux reformuler ?"
+
+        # 5) Envoi WhatsApp (OUT)
         tw_sid = None
         try:
             msg = twilio_client.messages.create(
@@ -151,7 +166,7 @@ def _process_incoming(sender: str, incoming_msg: str, msg_sid: str | None):
         except Exception as e_tw:
             print(f"[ERR][TWILIO] {e_tw}", flush=True)
 
-        # 5) Log OUT (dédup jour+source+hash ; msg_sid utile pour traçabilité)
+        # 6) Log OUT (dédup jour+source+hash ; msg_sid utile pour traçabilité)
         try:
             add_message(
                 user_phone=sender,
@@ -166,6 +181,7 @@ def _process_incoming(sender: str, incoming_msg: str, msg_sid: str | None):
 
     except Exception as e:
         print(f"[ERR][WORKER] {e}", flush=True)
+
 
 
 @app.route("/webhook", methods=["POST"])
